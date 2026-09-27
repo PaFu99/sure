@@ -504,6 +504,98 @@ class ReportsControllerTest < ActionDispatch::IntegrationTest
     assert_match(/\$100\.00/, other_investments_rows.first.text)
   end
 
+  test "breakdown splits category amounts by month and clips partial months to the period" do
+    @family.accounts.each { |account| account.entries.destroy_all }
+    account = accounts(:depository)
+    parent = @family.categories.create!(name: "Reports Interval Food", color: "#123456")
+    sub = @family.categories.create!(name: "Reports Interval Groceries", parent: parent, color: "#654321")
+
+    # Outside the period on both edges; must not appear anywhere
+    create_transaction(account: account, amount: 1000, category: parent, date: Date.new(2026, 1, 14))
+    create_transaction(account: account, amount: 1000, category: parent, date: Date.new(2026, 3, 11))
+    # Inside the period, including the first and last day
+    create_transaction(account: account, amount: 10, category: parent, date: Date.new(2026, 1, 15))
+    create_transaction(account: account, amount: 20, category: sub, date: Date.new(2026, 1, 31))
+    create_transaction(account: account, amount: 30, category: sub, date: Date.new(2026, 3, 10))
+
+    get reports_path(period_type: :custom, start_date: "2026-01-15", end_date: "2026-03-10")
+    assert_response :ok
+
+    assert_select "th[data-interval]", count: 3
+    assert_select "th[data-interval='2026-01']", text: /\$30\.00/
+    assert_select "th[data-interval='2026-02']", text: /\$0\.00/
+    assert_select "th[data-interval='2026-03']", text: /\$30\.00/
+
+    parent_row = "tr[data-category='category-#{parent.id}']"
+    assert_select "#{parent_row} td[data-interval='2026-01']", text: "$30.00"
+    assert_select "#{parent_row} td[data-interval='2026-02']", text: "–"
+    assert_select "#{parent_row} td[data-interval='2026-03']", text: "$30.00"
+    # Row total equals the sum of its interval cells
+    assert_select parent_row, text: /\$60\.00/
+
+    sub_row = "tr[data-category='category-#{sub.id}']"
+    assert_select "#{sub_row} td[data-interval='2026-01']", text: "$20.00"
+    assert_select "#{sub_row} td[data-interval='2026-03']", text: "$30.00"
+    assert_select sub_row, text: /\$50\.00/
+  end
+
+  test "breakdown splits category amounts by ISO week when weekly interval is selected" do
+    @family.accounts.each { |account| account.entries.destroy_all }
+    account = accounts(:depository)
+    expense = @family.categories.create!(name: "Reports Interval Weekly Expense", color: "#123456")
+    income = @family.categories.create!(name: "Reports Interval Weekly Income", color: "#654321")
+
+    # Period Wed 2026-08-05 .. Tue 2026-08-18 => partial KW 32, KW 33, partial KW 34
+    create_transaction(account: account, amount: 99, category: expense, date: Date.new(2026, 8, 4))
+    create_transaction(account: account, amount: 5, category: expense, date: Date.new(2026, 8, 5))
+    create_transaction(account: account, amount: 7, category: expense, date: Date.new(2026, 8, 9))
+    create_transaction(account: account, amount: 11, category: expense, date: Date.new(2026, 8, 18))
+    create_transaction(account: account, amount: -200, category: income, date: Date.new(2026, 8, 12))
+
+    get reports_path(period_type: :custom, start_date: "2026-08-05", end_date: "2026-08-18", breakdown_interval: "weekly")
+    assert_response :ok
+
+    # Header columns are rendered once per table (income + expense)
+    assert_select "th[data-interval='2026-W32']", count: 2
+    assert_select "th[data-interval='2026-W33']", count: 2
+    assert_select "th[data-interval='2026-W34']", count: 2
+    assert_select "th[data-interval='2026-W31']", count: 0
+
+    expense_row = "tr[data-category='category-#{expense.id}']"
+    assert_select "#{expense_row} td[data-interval='2026-W32']", text: "$12.00"
+    assert_select "#{expense_row} td[data-interval='2026-W33']", text: "–"
+    assert_select "#{expense_row} td[data-interval='2026-W34']", text: "$11.00"
+    assert_select expense_row, text: /\$23\.00/
+
+    income_row = "tr[data-category='category-#{income.id}']"
+    assert_select "#{income_row} td[data-interval='2026-W33']", text: "$200.00"
+
+    # Toggle keeps the current period filters
+    monthly_href = reports_path(period_type: "custom", start_date: Date.new(2026, 8, 5), end_date: Date.new(2026, 8, 18), breakdown_interval: "monthly")
+    assert_select "a[href=?][aria-current='true']", reports_path(period_type: "custom", start_date: Date.new(2026, 8, 5), end_date: Date.new(2026, 8, 18), breakdown_interval: "weekly")
+    assert_select "a[href=?]", monthly_href
+  end
+
+  test "breakdown interval is preserved in period navigation links" do
+    start_date = Date.new(2026, 3, 1)
+    end_date = start_date.end_of_month
+
+    get reports_path(period_type: :monthly, start_date: start_date, end_date: end_date, breakdown_interval: "weekly")
+    assert_response :ok
+
+    assert_select "a[href=?]", reports_path(period_type: :monthly, start_date: Date.new(2026, 2, 1), end_date: Date.new(2026, 2, 28), breakdown_interval: "weekly")
+    assert_select "a[href=?]", reports_path(period_type: :quarterly, breakdown_interval: "weekly")
+  end
+
+  test "invalid breakdown interval falls back to monthly" do
+    get reports_path(period_type: :monthly, breakdown_interval: "daily")
+    assert_response :ok
+
+    assert_select "th[data-interval]" do |headers|
+      headers.each { |th| assert_match(/\A\d{4}-\d{2}\z/, th["data-interval"]) }
+    end
+  end
+
   test "monthly period navigation shows previous month link" do
     get reports_path(period_type: :monthly)
     assert_response :ok

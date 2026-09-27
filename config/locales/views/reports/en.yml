@@ -87,6 +87,12 @@ en:
       add_account: Add Account
     transactions_breakdown:
       title: Activity Breakdown
+      interval:
+        aria_label: Breakdown interval
+        monthly: Monthly
+        weekly: Weekly
+        week_label: "W%{week}"
+        range: "%{start} - %{end}"
       no_transactions: No activity found for the selected period and filters
       filters:
         title: Filters

@@ -149,6 +149,12 @@ de:
       withdrawals_description: Aus Investments entnommen
     transactions_breakdown:
       title: Transaktionsübersicht
+      interval:
+        aria_label: Aufschlüsselungsintervall
+        monthly: Monatlich
+        weekly: Wöchentlich
+        week_label: "KW %{week}"
+        range: "%{start} - %{end}"
       no_transactions: Keine Transaktionen für den ausgewählten Zeitraum und Filter gefunden
       filters:
         title: Filter

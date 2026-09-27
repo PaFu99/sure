@@ -1,8 +1,14 @@
+<%
+  breakdown_interval = local_assigns.fetch(:breakdown_interval, Reports::BreakdownIntervals::DEFAULT_GRANULARITY)
+  breakdown_intervals = local_assigns[:breakdown_intervals]
+  # Only carried in links when it differs from the default
+  breakdown_interval_param = breakdown_interval unless breakdown_interval == Reports::BreakdownIntervals::DEFAULT_GRANULARITY
+%>
 <div>
-  <%# Export Controls %>
-  <div class="flex items-center justify-end mb-4 flex-wrap gap-3">
+  <%# Interval Toggle & Export Controls %>
+  <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
     <%
-      # Build params hash for links
+      # Build params hash for links (export links intentionally ignore breakdown_interval)
       base_params = {
         period_type: period_type,
         start_date: start_date,
@@ -11,6 +17,20 @@
         sort_direction: params[:sort_direction]
       }.compact
     %>
+
+    <%# Breakdown interval toggle %>
+    <% if transactions.any? && breakdown_intervals %>
+      <%= render DS::SegmentedControl.new(aria_label: t("reports.transactions_breakdown.interval.aria_label")) do |sc| %>
+        <% Reports::BreakdownIntervals::GRANULARITIES.each do |granularity| %>
+          <% sc.with_segment(t("reports.transactions_breakdown.interval.#{granularity}"),
+               active: breakdown_interval == granularity,
+               href: reports_path(base_params.merge(breakdown_interval: granularity)),
+               class: "whitespace-nowrap") %>
+        <% end %>
+      <% end %>
+    <% else %>
+      <div></div>
+    <% end %>
 
     <%# Export Options %>
     <div class="flex items-center gap-2">
@@ -47,7 +67,7 @@
       next_sort_direction = (current_sort_by == "amount" && current_sort_direction == "desc") ? "asc" : "desc"
 
       # Build params for amount sort link
-      amount_sort_params = base_params.merge(sort_by: "amount", sort_direction: next_sort_direction)
+      amount_sort_params = base_params.merge(sort_by: "amount", sort_direction: next_sort_direction, breakdown_interval: breakdown_interval_param).compact
     %>
 
     <div class="space-y-8">
@@ -61,7 +81,8 @@
               current_sort_by: current_sort_by,
               current_sort_direction: current_sort_direction,
               start_date: start_date,
-              end_date: end_date %>
+              end_date: end_date,
+              intervals: breakdown_intervals&.to_a || [] %>
       <% end %>
 
       <%# Expenses Section %>
@@ -74,7 +95,8 @@
               current_sort_by: current_sort_by,
               current_sort_direction: current_sort_direction,
               start_date: start_date,
-              end_date: end_date %>
+              end_date: end_date,
+              intervals: breakdown_intervals&.to_a || [] %>
       <% end %>
     </div>
 

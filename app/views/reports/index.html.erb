@@ -34,7 +34,7 @@
         <% %i[monthly quarterly ytd last_6_months custom].each do |ptype| %>
           <% sc.with_segment(t("reports.index.periods.#{ptype}"),
                active: @period_type == ptype,
-               href: reports_path(period_type: ptype),
+               href: reports_path(period_type: ptype, breakdown_interval: @breakdown_interval_param),
                class: "whitespace-nowrap") %>
         <% end %>
       <% end %>
@@ -44,6 +44,7 @@
     <% if @period_type == :custom %>
       <%= form_with url: reports_path, method: :get, data: { controller: "auto-submit-form" }, class: "flex items-center gap-3 bg-surface-inset p-3 rounded-lg" do |f| %>
         <%= f.hidden_field :period_type, value: :custom %>
+        <%= f.hidden_field :breakdown_interval, value: @breakdown_interval_param if @breakdown_interval_param %>
 
         <div class="flex items-center gap-2">
           <label class="text-sm font-medium text-secondary"><%= t("reports.index.date_range.from") %></label>
@@ -72,7 +73,7 @@
           <%= render DS::Link.new(
             variant: "icon",
             icon: "chevron-left",
-            href: reports_path(period_type: @period_type, start_date: @nav[:prev_start], end_date: @nav[:prev_end]),
+            href: reports_path(period_type: @period_type, start_date: @nav[:prev_start], end_date: @nav[:prev_end], breakdown_interval: @breakdown_interval_param),
             aria: { label: t("reports.index.previous_period") },
           ) %>
 
@@ -84,7 +85,7 @@
             <%= render DS::Link.new(
               variant: "icon",
               icon: "chevron-right",
-              href: reports_path(period_type: @period_type, start_date: @nav[:next_start], end_date: @nav[:next_end]),
+              href: reports_path(period_type: @period_type, start_date: @nav[:next_start], end_date: @nav[:next_end], breakdown_interval: @breakdown_interval_param),
               aria: { label: t("reports.index.next_period") },
             ) %>
           <% end %>
@@ -98,7 +99,7 @@
             <% end %>
 
             <% popover.with_custom_content do %>
-              <%= render "reports/period_picker", period_type: @period_type, start_date: @start_date %>
+              <%= render "reports/period_picker", period_type: @period_type, start_date: @start_date, breakdown_interval: @breakdown_interval_param %>
             <% end %>
           <% end %>
         <% else %>
@@ -109,7 +110,7 @@
           <%= render DS::Link.new(
             text: t("reports.index.today"),
             variant: "outline",
-            href: reports_path(period_type: @period_type),
+            href: reports_path(period_type: @period_type, breakdown_interval: @breakdown_interval_param),
           ) %>
         </div>
       </div>

@@ -93,7 +93,8 @@ class ReportsController < ApplicationController
     @start_date = parse_date_param(:start_date) || Date.current.beginning_of_month
     render partial: "reports/period_picker", locals: {
       period_type: @period_type,
-      start_date: @start_date
+      start_date: @start_date,
+      breakdown_interval: params[:breakdown_interval].presence_in(Reports::BreakdownIntervals::GRANULARITIES)
     }
   end
 
@@ -127,7 +128,11 @@ class ReportsController < ApplicationController
       # Net worth metrics
       @net_worth_metrics = build_net_worth_metrics
 
-      # Transactions breakdown
+      # Transactions breakdown (with per-interval split for the breakdown tables)
+      @breakdown_interval = Reports::BreakdownIntervals.normalize_granularity(params[:breakdown_interval])
+      @breakdown_intervals = Reports::BreakdownIntervals.new(start_date: @start_date, end_date: @end_date, granularity: @breakdown_interval)
+      # Only carried through navigation links when it differs from the default, keeping URLs unchanged otherwise
+      @breakdown_interval_param = @breakdown_interval unless @breakdown_interval == Reports::BreakdownIntervals::DEFAULT_GRANULARITY
       @transactions = build_transactions_breakdown
 
       # Investment metrics
@@ -193,7 +198,9 @@ class ReportsController < ApplicationController
             transactions: @transactions,
             period_type: @period_type,
             start_date: @start_date,
-            end_date: @end_date
+            end_date: @end_date,
+            breakdown_interval: @breakdown_interval,
+            breakdown_intervals: @breakdown_intervals
           },
           visible: @has_accounts,
           collapsible: true
@@ -407,6 +414,7 @@ class ReportsController < ApplicationController
           total: 0,
           count: 0,
           has_transactions: false,
+          intervals: Hash.new(0),
           subcategories: {}
         }
       end
@@ -420,7 +428,8 @@ class ReportsController < ApplicationController
           category_icon: category.lucide_icon,
           total: 0,
           count: 0,
-          has_transactions: false
+          has_transactions: false,
+          intervals: Hash.new(0)
         }
       end
 
@@ -432,6 +441,7 @@ class ReportsController < ApplicationController
         rescue Money::ConversionError
           converted_amount = entry.amount.abs
         end
+        interval_key = @breakdown_intervals&.key_for(entry.date)
 
         if category.nil?
           # Uncategorized or Other Investments (for trades)
@@ -453,6 +463,7 @@ class ReportsController < ApplicationController
           grouped_data[parent_key][:subcategories][category.id][:count] += 1
           grouped_data[parent_key][:subcategories][category.id][:total] += converted_amount
           grouped_data[parent_key][:subcategories][category.id][:has_transactions] = true unless is_trade
+          grouped_data[parent_key][:subcategories][category.id][:intervals][interval_key] += converted_amount if interval_key
         else
           # This is a root category (no parent)
           parent_key = [ category.id, type ]
@@ -462,6 +473,7 @@ class ReportsController < ApplicationController
         grouped_data[parent_key][:count] += 1
         grouped_data[parent_key][:total] += converted_amount
         grouped_data[parent_key][:has_transactions] = true unless is_trade
+        grouped_data[parent_key][:intervals][interval_key] += converted_amount if interval_key
       end
 
       # Process transactions

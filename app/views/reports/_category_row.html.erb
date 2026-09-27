@@ -4,6 +4,7 @@
   show_border = local_assigns.fetch(:show_border, false)
   row_start_date = local_assigns[:start_date]
   row_end_date = local_assigns[:end_date]
+  intervals = local_assigns.fetch(:intervals, [])
   # /transactions only lists Transaction rows. Skip trade-only buckets (e.g. Other
   # Investments) so the destination is not empty relative to the report row.
   clickable = item[:has_transactions] && row_start_date.present? && row_end_date.present?
@@ -12,7 +13,7 @@
 
 <tr data-category="category-<%= item[:category_id] %>"
     class="text-secondary text-sm <%= show_border ? "table-divider" : "" %> <%= clickable ? "relative group/category-row" : "" %>">
-  <td colspan="2" class="py-3 px-4 lg:px-6 <%= is_sub ? "pl-7 lg:pl-9" : "" %>">
+  <td colspan="2" class="py-3 px-4 lg:px-6 <%= is_sub ? "pl-7 lg:pl-9" : "" %> <%= intervals.any? ? "sticky left-0 z-10 bg-container" : "" %>">
     <div class="flex items-center gap-2">
       <% if is_sub %>
         <div class="text-subdued">
@@ -54,6 +55,19 @@
       </span>
     </div>
   </td>
+
+  <% intervals.each do |interval| %>
+    <% interval_amount = item[:intervals]&.fetch(interval.key, 0) || 0 %>
+    <td class="py-3 px-3 text-right whitespace-nowrap" data-interval="<%= interval.key %>">
+      <% if interval_amount.zero? %>
+        <span class="text-sm text-subdued">–</span>
+      <% else %>
+        <span class="text-sm <%= color_class %> privacy-sensitive">
+          <%= Money.new(interval_amount, Current.family.currency).format %>
+        </span>
+      <% end %>
+    </td>
+  <% end %>
 
   <td class="py-3 px-4 lg:px-6 text-right">
     <span class="text-sm <%= color_class %> privacy-sensitive">
